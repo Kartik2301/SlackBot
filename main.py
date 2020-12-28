@@ -5,6 +5,7 @@ from dotenv import load_dotenv
 from flask import Flask, request, Response
 from slackeventsapi import SlackEventAdapter
 import string
+from datetime import datetime, timedelta
 
 env_path = Path('.') / '.env'
 load_dotenv(dotenv_path=env_path)
@@ -21,6 +22,28 @@ welcome_messages = {}
 
 BAD_WORDS = ['hmm', 'tim', 'no']
 
+SCHEDULED_MESSAGES = [
+    {'text':'First message','post_at': (datetime.now() + timedelta(seconds=40)).timestamp(),'channel':'C01H7HJ8NCF'},
+    {'text': 'Second message','post_at': (datetime.now() + timedelta(seconds=50)).timestamp(),'channel':'C01H7HJ8NCF'},
+]
+
+def schedule_messages(messages):
+    ids=[]
+    for message in messages:
+        response = client.chat_scheduleMessage(channel=message['channel'],text=message['text'], post_at=message['post_at'])
+        id_ = response.get('scheduled_message_id')
+        ids.append(id_)
+        
+    return ids
+
+def delete_scheduled_messages(ids, channel):
+    for _id in ids:
+        try:
+            client.chat_deleteScheduledMessage(
+                channel=channel, scheduled_message_id=_id)
+        except Exception as e:
+            print(e)
+
 def send_welcome_message(channel,user):
     if channel not in welcome_messages:
         welcome_messages[channel] = {}
@@ -33,6 +56,15 @@ def send_welcome_message(channel,user):
     response = client.chat_postMessage(**message)
     welcome.timestamp = response['ts']
     welcome_messages[channel][user] = welcome
+    
+def list_scheduled_messages(channel):
+    response = client.chat_scheduledMessages_list(channel=channel)
+    messages = response.data.get('scheduled_messages')
+    ids = []
+    for msg in messages:
+        ids.append(msg.get('id'))
+
+    return ids
 
 class WelcomeMessage:
     START_TEXT = {
@@ -129,4 +161,7 @@ def message_count():
     return Response(), 200
 
 if __name__ == "__main__" :
+    schedule_messages(SCHEDULED_MESSAGES)
+    ids = list_scheduled_messages('C01H7HJ8NCF')
+    delete_scheduled_messages(ids,'C01H7HJ8NCF')
     app.run(debug=True)
